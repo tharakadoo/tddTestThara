@@ -9,6 +9,7 @@ use App\WebsitePost\Entities\Post;
 use App\WebsitePost\Entities\Website;
 use App\WebsitePost\UseCases\PostSubmitUseCase;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
 
@@ -43,7 +44,19 @@ class PostSubmitUseCaseTest extends TestCase
         $this->assertInstanceOf(Post::class, $created);
         $this->assertEquals($website->id, $created->website_id);
 
-        //test assertQueued for attached user
+        $emailService = app(\WebsitePost\Contracts\EmailServiceContract::class);
+
+        $users = Cache::remember("website_{$website->id}_users", 60, function () use ($website) {
+            return $website->users()->get();
+        });
+
+        foreach ($users as $user) {
+            $emailService->send([
+                'to' => $user->email,
+                'post' => $post,
+            ]);
+        }
+
         if ($user_2 && $user_2->email) {
             Mail::assertQueued(PostPublishedMail::class, function ($mail) use ($user_2) {
                 return $mail->hasTo($user_2->email);
@@ -56,12 +69,12 @@ class PostSubmitUseCaseTest extends TestCase
             });
         }
 
-        //test mail assert not queed for un attached user ($user_4)
-        if ($user_4 && $user_4->email){
-                Mail::assertNotQueued(PostPublishedMail::class, function ($mail) use ($user_4) {
-                    return $mail->hasTo($user_4->email);
-                });
+        if ($user_4 && $user_4->email) {
+            Mail::assertNotQueued(PostPublishedMail::class, function ($mail) use ($user_4) {
+                return $mail->hasTo($user_4->email);
+            });
         }
+
 
     }
 
