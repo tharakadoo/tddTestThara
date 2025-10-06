@@ -12,7 +12,7 @@ class EmailService implements EmailServiceContract
     public function send(array $data): bool
     {
         try {
-            Mail::to($data['to'])->queue(new PostPublishedMail($data['post'] ?? null));
+            Mail::to($data['to'])->queue(new PostPublishedMail($data['post']));
             return true;
         } catch (\Exception $e) {
             Log::error('Email sending failed: ' . $e->getMessage());

@@ -2,6 +2,8 @@
 
 namespace Tests\Unit;
 
+use App\Events\PostPublished;
+use App\Listeners\SendPostPublishedEmail;
 use App\Mail\PostPublishedMail;
 use App\WebsitePost\Entities\User;
 use Tests\TestCase;
@@ -10,6 +12,7 @@ use App\WebsitePost\Entities\Website;
 use App\WebsitePost\UseCases\PostSubmitUseCase;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
 
@@ -78,6 +81,7 @@ class PostSubmitUseCaseTest extends TestCase
 
     }
 
+
     public function test_post_cannot_be_submitted_without_title(): void
     {
         $useCase = new PostSubmitUseCase();
@@ -109,6 +113,7 @@ class PostSubmitUseCaseTest extends TestCase
     public function test_email_is_not_sent_twice_to_same_user_for_same_post(): void
     {
         Mail::fake();
+        Event::fake();
 
         $website = Website::factory()->create();
         $user = User::factory()->create();
@@ -120,8 +125,16 @@ class PostSubmitUseCaseTest extends TestCase
         // First send
         $useCase->execute($post->toArray());
 
+        Event::assertDispatched(PostPublished::class, 1);
+
+        (new SendPostPublishedEmail(app(\WebsitePost\Contracts\EmailServiceContract::class)))
+            ->handle(new PostPublished($post));
+
         // Simulate trying to send again
         $useCase->execute(array_merge($post->toArray(), ['id' => $post->id]));
+
+        (new SendPostPublishedEmail(app(\WebsitePost\Contracts\EmailServiceContract::class)))
+            ->handle(new PostPublished($post));
 
         // Assert only one email queued for the user
         Mail::assertQueued(PostPublishedMail::class, function ($mail) use ($user) {

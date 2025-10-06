@@ -2,6 +2,7 @@
 
 namespace App\WebsitePost\UseCases;
 
+use App\Events\PostPublished;
 use App\Mail\PostPublishedMail;
 use App\WebsitePost\Entities\Post;
 use App\WebsitePost\Entities\Website;
@@ -36,12 +37,7 @@ class PostSubmitUseCase
                 'content' => $data['content'],
             ]);
 
-        foreach ($website->users as $user) {
-            if (!$post->emailedUsers()->where('user_id', $user->id)->exists()) {
-                Mail::to($user->email)->queue(new PostPublishedMail($post));
-                $post->emailedUsers()->attach($user->id);
-            }
-        }
+        event(new PostPublished($post));
 
         return $post;
 
